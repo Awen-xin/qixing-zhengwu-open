@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="七星区政务服务中心与城市天际线">
+  <defs>
+    <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#b9d8ee"/>
+      <stop offset=".56" stop-color="#e7eef4"/>
+      <stop offset="1" stop-color="#c9d3dc"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" x2="1">
+      <stop offset="0" stop-color="#315f84"/>
+      <stop offset="1" stop-color="#789fba"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <path d="M0 612c164-66 312-72 482-22 162 48 276 16 415-42 190-80 408-65 703 42v310H0Z" fill="#d5dee6"/>
+  <path d="M0 674c214-44 414-39 598 14 164 47 324 50 492 5 168-46 338-48 510-3v210H0Z" fill="#b7c5cf"/>
+  <g opacity=".58" fill="#6d8396">
+    <rect x="1020" y="334" width="86" height="260"/>
+    <rect x="1124" y="285" width="110" height="309"/>
+    <rect x="1252" y="360" width="76" height="234"/>
+    <rect x="1344" y="314" width="132" height="280"/>
+    <rect x="1492" y="388" width="68" height="206"/>
+  </g>
+  <g fill="#eef3f7">
+    <path d="M330 402h735l76 86H254Z"/>
+    <rect x="286" y="488" width="820" height="250"/>
+    <rect x="230" y="738" width="934" height="55"/>
+  </g>
+  <g fill="#c92f24">
+    <rect x="296" y="472" width="804" height="24"/>
+    <rect x="388" y="362" width="590" height="42"/>
+  </g>
+  <g fill="url(#glass)">
+    <rect x="346" y="526" width="92" height="160"/>
+    <rect x="476" y="526" width="92" height="160"/>
+    <rect x="606" y="526" width="92" height="160"/>
+    <rect x="736" y="526" width="92" height="160"/>
+    <rect x="866" y="526" width="92" height="160"/>
+    <rect x="996" y="526" width="50" height="160"/>
+  </g>
+  <g fill="#f8fbfd">
+    <rect x="370" y="542" width="44" height="128"/>
+    <rect x="500" y="542" width="44" height="128"/>
+    <rect x="630" y="542" width="44" height="128"/>
+    <rect x="760" y="542" width="44" height="128"/>
+    <rect x="890" y="542" width="44" height="128"/>
+  </g>
+  <rect x="610" y="642" width="176" height="96" fill="#2f5878"/>
+  <rect x="632" y="662" width="54" height="76" fill="#dceaf2"/>
+  <rect x="710" y="662" width="54" height="76" fill="#dceaf2"/>
+  <path d="M231 794h934v32H231Z" fill="#8c9baa"/>
+  <g fill="#47687f">
+    <rect x="130" y="700" width="68" height="110"/>
+    <rect x="144" y="670" width="40" height="30"/>
+    <rect x="1220" y="690" width="86" height="120"/>
+    <rect x="1242" y="655" width="42" height="35"/>
+  </g>
+  <g fill="#2f754d">
+    <circle cx="118" cy="728" r="42"/>
+    <circle cx="1394" cy="732" r="52"/>
+    <circle cx="1510" cy="740" r="38"/>
+  </g>
+  <path d="M0 826h1600v74H0Z" fill="#7f8d98"/>
+  <path d="M0 850h1600" stroke="#e8eef2" stroke-width="8" stroke-dasharray="80 42"/>
+</svg>

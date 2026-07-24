@@ -1,0 +1,13 @@
+# Local/generated files
+qixing-site.zip
+output/
+
+# Codex/local agent metadata
+.agents/
+.codex/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>七星数智公开一体化云平台</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="screen screen--home is-active" id="home-screen" aria-labelledby="home-title">
+        <img class="screen__bg" src="assets/home-field-bg.jpg" alt="七星农场田野首页背景" />
+        <div class="home-vignette" aria-hidden="true"></div>
+        <h1 class="home-title" id="home-title">七星数智公开一体化云平台</h1>
+
+        <div class="home-user">
+          <span id="home-user-role">未登录</span>
+          <button type="button" data-login>登录/注册</button>
+        </div>
+
+        <button class="bowl-entry" type="button" data-dashboard aria-label="进入整体数据驾驶舱">
+          <img src="assets/dashboard-entry-new-transparent.png" alt="" />
+        </button>
+
+        <nav class="hex-menu" aria-label="六大栏目入口">
+          <button class="hex hex--party" type="button" data-module="党务公开"><span>党务公开</span></button>
+          <button class="hex hex--gov" type="button" data-module="政务公开"><span>政务公开</span></button>
+          <button class="hex hex--finance" type="button" data-module="财务公开"><span>财务公开</span></button>
+          <button class="hex hex--staff" type="button" data-module="职工疑问"><span>职工疑问</span></button>
+          <button class="hex hex--cadre" type="button" data-module="干部答疑"><span>干部答疑</span></button>
+          <button class="hex hex--notice" type="button" data-module="通知公告"><span>通知公告</span></button>
+        </nav>
+      </section>
+
+      <section class="screen screen--login" id="login-screen" aria-labelledby="login-title">
+        <div class="section-bg" aria-hidden="true"></div>
+        <button class="ghost-btn login-back" type="button" data-home>返回首页</button>
+        <div class="login-layout">
+          <form class="login-panel" id="login-form">
+            <p>管理员登录</p>
+            <h1 id="login-title">登录系统</h1>
+            <label>
+              用户身份
+              <select id="role-select">
+                <option value="unitAdmin">普通管理员</option>
+                <option value="superAdmin">最高权限管理员</option>
+              </select>
+            </label>
+            <label>
+              所属单位
+              <select id="login-unit"></select>
+            </label>
+            <label>
+              登录账号
+              <input type="text" value="demo" />
+            </label>
+            <label>
+              登录密码
+              <input type="password" value="123456" />
+            </label>
+            <button type="submit">登录并进入管理界面</button>
+            <small id="role-tip">普通管理员只能上传和删除本单位信息。</small>
+          </form>
+
+          <form class="login-panel" id="register-form">
+            <p>普通用户注册</p>
+            <h1>注册浏览</h1>
+            <label>
+              姓名
+              <input name="name" type="text" placeholder="请输入姓名" required />
+            </label>
+            <label>
+              电话号
+              <input name="phone" type="tel" placeholder="请输入电话号" required />
+            </label>
+            <button type="submit">注册并查看公开信息</button>
+            <small>普通用户只登记姓名和电话号，只能查看公开信息，不能上传。</small>
+          </form>
+        </div>
+      </section>
+
+      <section class="screen screen--public" id="public-screen" aria-labelledby="public-title">
+        <div class="section-bg" aria-hidden="true"></div>
+        <header class="page-head">
+          <button class="ghost-btn" type="button" data-home>返回首页</button>
+          <div>
+            <p>普通用户公开信息</p>
+            <h2 id="public-title">政务公开信息栏</h2>
+          </div>
+          <div class="user-badge" id="public-user-badge">普通用户</div>
+        </header>
+
+        <section class="public-layout">
+          <aside class="side-panel">
+            <h3>信息筛选</h3>
+            <label>
+              单位名称
+              <select id="public-unit-filter"></select>
+            </label>
+            <label>
+              时间排序
+              <select id="public-sort">
+                <option value="desc">最新发布在上</option>
+                <option value="asc">最早发布在上</option>
+              </select>
+            </label>
+            <label>
+              关键词
+              <input id="public-keyword" type="search" placeholder="搜索标题、单位、文件名" />
+            </label>
+          </aside>
+
+          <section class="content-panel">
+            <div class="panel-head">
+              <div>
+                <p>用户只读浏览</p>
+                <h3>各单位政务公开信息</h3>
+              </div>
+            </div>
+            <div class="module-stats" id="public-stats"></div>
+            <div class="public-list" id="public-list"></div>
+          </section>
+        </section>
+      </section>
+
+      <section class="screen screen--module" id="module-screen" aria-labelledby="module-title">
+        <div class="section-bg" aria-hidden="true"></div>
+        <header class="page-head">
+          <button class="ghost-btn" type="button" data-home>返回首页</button>
+          <div>
+            <p>管理员栏目公开</p>
+            <h2 id="module-title">政务公开</h2>
+          </div>
+          <div class="user-badge" id="user-badge">管理员</div>
+        </header>
+
+        <nav class="module-tabs" id="module-tabs" aria-label="栏目切换"></nav>
+
+        <section class="module-layout">
+          <aside class="side-panel">
+            <h3>单位目录</h3>
+            <div class="unit-group-tabs" id="unit-group-tabs"></div>
+            <label>
+              单位筛选
+              <select id="unit-filter"></select>
+            </label>
+            <label>
+              时效筛选
+              <select id="time-filter">
+                <option value="全部">全部</option>
+                <option value="长期">长期公开</option>
+                <option value="阶段">阶段公开</option>
+                <option value="临时">临时公开</option>
+              </select>
+            </label>
+            <label>
+              关键词
+              <input id="keyword-filter" type="search" placeholder="搜索标题、单位、文件名" />
+            </label>
+          </aside>
+
+          <section class="content-panel">
+            <div class="panel-head">
+              <div>
+                <p id="module-subtitle">本栏目展示各单位公开信息</p>
+                <h3 id="module-summary">公开信息统计</h3>
+              </div>
+              <select id="metric-select" aria-label="图表维度">
+                <option value="unitType">按单位类型</option>
+                <option value="region">按具体单位</option>
+                <option value="timeLevel">按公开时效</option>
+                <option value="status">按状态</option>
+              </select>
+            </div>
+            <div class="module-stats" id="module-stats"></div>
+            <div class="bar-chart" id="module-chart"></div>
+            <div class="record-grid" id="record-grid"></div>
+          </section>
+
+          <aside class="admin-panel" id="admin-panel" hidden>
+            <h3>信息上传</h3>
+            <p id="admin-scope">管理员可上传信息。</p>
+            <form class="upload-form" id="upload-form">
+              <label>
+                上传栏目
+                <select name="module"></select>
+              </label>
+              <label>
+                所属单位
+                <select name="region"></select>
+              </label>
+              <label>
+                信息标题
+                <input name="title" type="text" placeholder="请输入公开信息标题" required />
+              </label>
+              <label>
+                公示时效
+                <select name="timeLevel">
+                  <option>长期</option>
+                  <option>阶段</option>
+                  <option>临时</option>
+                </select>
+              </label>
+              <label>
+                上传文件
+                <input name="file" type="file" accept=".doc,.docx,.pdf,.xls,.xlsx" required />
+              </label>
+              <button type="submit">上传并展示</button>
+            </form>
+
+            <div class="unit-admin" id="unit-admin" hidden>
+              <h3>单位管理</h3>
+              <form id="unit-form">
+                <select name="type">
+                  <option value="management">管理区</option>
+                  <option value="direct">直属单位</option>
+                  <option value="office">机关部门</option>
+                </select>
+                <input name="name" type="text" placeholder="新增单位名称" />
+                <button type="submit">新增单位</button>
+              </form>
+              <div class="unit-list" id="unit-admin-list"></div>
+            </div>
+          </aside>
+        </section>
+      </section>
+
+      <section class="screen screen--dashboard" id="dashboard-screen" aria-labelledby="dashboard-title">
+        <div class="section-bg" aria-hidden="true"></div>
+        <header class="page-head">
+          <button class="ghost-btn" type="button" data-home>返回首页</button>
+          <div>
+            <p>整体公开数据</p>
+            <h2 id="dashboard-title">七星数智公开整体驾驶舱</h2>
+          </div>
+          <div class="user-badge">中国粮食饭碗入口</div>
+        </header>
+        <section class="dashboard-layout">
+          <div class="dash-card dash-card--wide">
+            <div class="panel-head">
+              <div>
+                <p>树状结构</p>
+                <h3>公开体系总览</h3>
+              </div>
+            </div>
+            <div class="tree-map" id="tree-map"></div>
+          </div>
+          <div class="dash-card">
+            <div class="panel-head">
+              <div>
+                <p>总量统计</p>
+                <h3>栏目数据对比</h3>
+              </div>
+            </div>
+            <div class="bar-chart" id="dashboard-chart"></div>
+          </div>
+          <div class="dash-card">
+            <div class="panel-head">
+              <div>
+                <p>单位分布</p>
+                <h3>组织覆盖</h3>
+              </div>
+            </div>
+            <div class="dashboard-kpis" id="dashboard-kpis"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>
