@@ -1,6 +1,11 @@
 # Local/generated files
 qixing-site.zip
+qixing-real-site.zip
+qixing-real-site/
 output/
+data/db.json
+uploads/*
+!uploads/.gitkeep
 
 # Codex/local agent metadata
 .agents/
@@ -10,4 +15,3 @@ output/
 .DS_Store
 Thumbs.db
 .vscode/
-

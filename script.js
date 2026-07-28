@@ -1,10 +1,20 @@
-const chineseNumbers = [
+const unitTypeNames = { management: "管理区", direct: "直属单位", office: "机关部门" };
+const moduleDescriptions = {
+  党务公开: "展示管理区、直属单位、机关部门的党务信息公开情况。",
+  政务公开: "展示管理区、直属单位、机关部门的政务服务、政策制度和重点工作公开情况。",
+  财务公开: "展示管理区、直属单位、机关部门的预算、收支、资金、采购等公开情况。",
+  职工疑问: "展示职工疑问、相关单位答复和办理进度。",
+  干部答疑: "展示干部答疑、制度解释和基层治理沟通信息。",
+  通知公告: "展示平台公告、单位通知、临时事项和重要提醒。"
+};
+
+const fallbackChineseNumbers = [
   "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
   "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十"
 ];
 
-const units = {
-  management: chineseNumbers.map((number) => `第${number}管理区`),
+const fallbackUnits = {
+  management: fallbackChineseNumbers.map((number) => `第${number}管理区`),
   direct: [
     "水利中心", "农业综合服务中心", "农业技术推广中心", "粮食和农产品贸易中心", "科技信息中心",
     "公共服务管理中心", "卫生服务中心", "资源管理中心", "城镇管理维护中心", "幼儿园"
@@ -16,16 +26,7 @@ const units = {
   ]
 };
 
-const unitTypeNames = { management: "管理区", direct: "直属单位", office: "机关部门" };
-const modules = ["党务公开", "政务公开", "财务公开", "职工疑问", "干部答疑", "通知公告"];
-const moduleDescriptions = {
-  党务公开: "展示管理区、直属单位、机关部门的党务信息公开情况。",
-  政务公开: "展示管理区、直属单位、机关部门的政务服务、政策制度和重点工作公开情况。",
-  财务公开: "展示管理区、直属单位、机关部门的预算、收支、资金、采购等公开情况。",
-  职工疑问: "展示职工疑问、相关单位答复和办理进度。",
-  干部答疑: "展示干部答疑、制度解释和基层治理沟通信息。",
-  通知公告: "展示平台公告、单位通知、临时事项和重要提醒。"
-};
+const fallbackModules = ["党务公开", "政务公开", "财务公开", "职工疑问", "干部答疑", "通知公告"];
 
 function qs(selector) {
   return document.querySelector(selector);
@@ -42,12 +43,13 @@ function makeRecord(module, region, unitType, title, timeLevel, type, status, fi
     type,
     status,
     fileName,
+    fileUrl: "",
     count,
     createdAt
   };
 }
 
-let records = [
+const fallbackRecords = [
   makeRecord("党务公开", "第一管理区", "management", "党组织架构与党员岗位职责公开", "长期", "制度规章", "已公开", "党务公开说明.docx", 1248, "2026-07-18"),
   makeRecord("党务公开", "党委工作部", "office", "党员发展及预备党员转正公示", "临时", "人员公示", "待审核", "党员发展公示.pdf", 927, "2026-07-16"),
   makeRecord("政务公开", "第二十管理区", "management", "便民办理流程和政策服务清单", "长期", "办事流程", "已公开", "政务服务清单.docx", 1321, "2026-07-20"),
@@ -64,6 +66,10 @@ let records = [
   makeRecord("通知公告", "农业技术推广中心", "direct", "农业技术培训安排", "阶段", "通知公告", "已公开", "培训安排.docx", 318, "2026-07-07")
 ];
 
+let units = structuredClone(fallbackUnits);
+let modules = [...fallbackModules];
+let records = [...fallbackRecords];
+let apiReady = location.protocol !== "file:";
 let currentRole = "guest";
 let currentUnit = "第一管理区";
 let currentModule = "政务公开";
@@ -112,6 +118,31 @@ const dashboardChart = qs("#dashboard-chart");
 const dashboardKpis = qs("#dashboard-kpis");
 const treeMap = qs("#tree-map");
 
+async function api(path, options = {}) {
+  const response = await fetch(path, { credentials: "same-origin", ...options });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || "操作失败");
+  return data;
+}
+
+async function loadData() {
+  if (!apiReady) {
+    populateControls();
+    return;
+  }
+  try {
+    const data = await api("/api/bootstrap");
+    units = data.units;
+    modules = data.modules;
+    records = data.records;
+    if (data.user) applyUser(data.user);
+  } catch (error) {
+    apiReady = false;
+    console.warn("后端接口暂不可用，已切换为本地演示模式。", error);
+  }
+  populateControls();
+}
+
 function allUnits() {
   return Object.entries(units).flatMap(([unitType, names]) => names.map((name) => ({ name, unitType })));
 }
@@ -128,12 +159,21 @@ function roleName() {
   return "未登录";
 }
 
-function setLoggedIn(role) {
-  currentRole = role;
-  if (role !== "public") currentUnit = loginUnit.value || currentUnit;
+function applyUser(user) {
+  currentRole = user?.role || "guest";
+  currentUnit = user?.unit || currentUnit;
+  registeredName = user?.name || registeredName;
   homeUserRole.textContent = roleName();
   userBadge.textContent = roleName();
   publicUserBadge.textContent = roleName();
+}
+
+function setLoggedIn(role) {
+  applyUser({
+    role,
+    unit: role === "public" ? currentUnit : (loginUnit.value || currentUnit),
+    name: role === "public" ? registeredName : ""
+  });
 }
 
 function requireLogin(action) {
@@ -182,10 +222,7 @@ function countByUnit(sourceRows) {
 function renderPublicUnitFilter(keepValue = "全部") {
   const publicRows = records.filter((record) => record.module === "政务公开");
   const counts = countByUnit(publicRows);
-  const options = allUnits().map((unit) => {
-    const count = counts[unit.name] || 0;
-    return `<option value="${unit.name}">${unit.name}（${count}份）</option>`;
-  }).join("");
+  const options = allUnits().map((unit) => `<option value="${unit.name}">${unit.name}（${counts[unit.name] || 0}份）</option>`).join("");
   publicUnitFilter.innerHTML = `<option value="全部">全部单位（${publicRows.length}份）</option>${options}`;
   publicUnitFilter.value = [...publicUnitFilter.options].some((option) => option.value === keepValue) ? keepValue : "全部";
 }
@@ -199,8 +236,13 @@ function publicRows() {
   });
   return rows.sort((a, b) => {
     const direction = publicSort.value === "asc" ? 1 : -1;
-    return direction * a.createdAt.localeCompare(b.createdAt);
+    return direction * String(a.createdAt).localeCompare(String(b.createdAt));
   });
+}
+
+function fileText(record) {
+  if (record.fileUrl) return `<a href="${record.fileUrl}" target="_blank" rel="noopener">${record.fileName}</a>`;
+  return `<span>${record.fileName}</span>`;
 }
 
 function renderPublicView() {
@@ -222,7 +264,7 @@ function renderPublicView() {
       </div>
       <h3>${record.title}</h3>
       <p>${record.region} · ${record.type} · ${record.status}</p>
-      <footer><span>${record.createdAt}</span><span>${record.fileName}</span></footer>
+      <footer><span>${record.createdAt}</span>${fileText(record)}</footer>
     </article>
   `).join("") || `<p class="empty-state">暂无符合条件的政务公开信息。</p>`;
 }
@@ -303,7 +345,7 @@ function renderModule() {
       <div><span class="tag">${unitTypeNames[record.unitType]}</span><span class="tag tag--time">${record.timeLevel}</span></div>
       <h3>${record.title}</h3>
       <p>${record.region} · ${record.type} · ${record.status}</p>
-      <small>${record.createdAt} · ${record.fileName}</small>
+      <small>${record.createdAt} · ${fileText(record)}</small>
       ${canDelete(record) ? `<button class="delete-btn" type="button" data-delete="${record.id}">删除</button>` : ""}
     </article>
   `).join("") || `<p class="empty-state">当前筛选条件下暂无信息。</p>`;
@@ -350,6 +392,16 @@ function renderUnitAdminList() {
   `).join("");
 }
 
+async function refreshFromServer() {
+  if (!apiReady) return;
+  const data = await api("/api/bootstrap");
+  units = data.units;
+  modules = data.modules;
+  records = data.records;
+  if (data.user) applyUser(data.user);
+  populateControls();
+}
+
 document.querySelectorAll("[data-module]").forEach((button) => {
   button.addEventListener("click", () => requireLogin(() => {
     if (currentRole === "public") {
@@ -375,19 +427,45 @@ document.querySelector("[data-dashboard]").addEventListener("click", () => requi
 document.querySelectorAll("[data-home]").forEach((button) => button.addEventListener("click", () => showScreen("home")));
 document.querySelectorAll("[data-login]").forEach((button) => button.addEventListener("click", () => showScreen("login")));
 
-loginForm.addEventListener("submit", (event) => {
+loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  setLoggedIn(roleSelect.value);
-  continueAfterAdminLogin();
+  try {
+    if (apiReady) {
+      const data = await api("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: roleSelect.value, unit: loginUnit.value })
+      });
+      applyUser(data.user);
+    } else {
+      setLoggedIn(roleSelect.value);
+    }
+    continueAfterAdminLogin();
+  } catch (error) {
+    alert(error.message);
+  }
 });
 
-registerForm.addEventListener("submit", (event) => {
+registerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = new FormData(registerForm);
   registeredName = data.get("name").trim();
-  setLoggedIn("public");
-  registerForm.reset();
-  showPublicView();
+  try {
+    if (apiReady) {
+      const result = await api("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: registeredName, phone: data.get("phone").trim() })
+      });
+      applyUser(result.user);
+    } else {
+      setLoggedIn("public");
+    }
+    registerForm.reset();
+    showPublicView();
+  } catch (error) {
+    alert(error.message);
+  }
 });
 
 roleSelect.addEventListener("change", () => {
@@ -416,60 +494,102 @@ unitGroupTabs.addEventListener("click", (event) => {
 });
 [unitFilter, timeFilter, keywordFilter, metricSelect].forEach((control) => control.addEventListener("input", renderModule));
 
-uploadForm.addEventListener("submit", (event) => {
+uploadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!canUpload()) return;
   const data = new FormData(uploadForm);
   const region = currentRole === "unitAdmin" ? currentUnit : data.get("region");
-  const unit = allUnits().find((item) => item.name === region);
-  records.unshift(makeRecord(
-    data.get("module"),
-    region,
-    unit?.unitType || "office",
-    data.get("title").trim(),
-    data.get("timeLevel"),
-    "上传文件",
-    "已公开",
-    data.get("file")?.name || "未命名文件",
-    1,
-    new Date().toISOString().slice(0, 10)
-  ));
-  currentModule = data.get("module");
-  uploadForm.reset();
-  populateControls();
-  renderModule();
+  try {
+    if (apiReady) {
+      data.set("region", region);
+      const result = await api("/api/records", { method: "POST", body: data });
+      records = result.records;
+    } else {
+      const unit = allUnits().find((item) => item.name === region);
+      records.unshift(makeRecord(
+        data.get("module"),
+        region,
+        unit?.unitType || "office",
+        data.get("title").trim(),
+        data.get("timeLevel"),
+        "上传文件",
+        "已公开",
+        data.get("file")?.name || "未命名文件",
+        1,
+        new Date().toISOString().slice(0, 10)
+      ));
+    }
+    currentModule = data.get("module");
+    uploadForm.reset();
+    populateControls();
+    renderModule();
+  } catch (error) {
+    alert(error.message);
+  }
 });
 
-recordGrid.addEventListener("click", (event) => {
+recordGrid.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-delete]");
   if (!button) return;
   const target = records.find((record) => record.id === button.dataset.delete);
   if (!target || !canDelete(target)) return;
-  records = records.filter((record) => record.id !== target.id);
-  renderModule();
+  try {
+    if (apiReady) {
+      const result = await api(`/api/records/${encodeURIComponent(target.id)}`, { method: "DELETE" });
+      records = result.records;
+    } else {
+      records = records.filter((record) => record.id !== target.id);
+    }
+    renderModule();
+  } catch (error) {
+    alert(error.message);
+  }
 });
 
-unitForm.addEventListener("submit", (event) => {
+unitForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (currentRole !== "superAdmin") return;
   const data = new FormData(unitForm);
   const type = data.get("type");
   const name = data.get("name").trim();
-  if (name && !units[type].includes(name)) units[type].push(name);
-  unitForm.reset();
-  populateControls();
-  renderModule();
+  try {
+    if (apiReady) {
+      const result = await api("/api/units", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, name })
+      });
+      units = result.units;
+    } else if (name && !units[type].includes(name)) {
+      units[type].push(name);
+    }
+    unitForm.reset();
+    populateControls();
+    renderModule();
+  } catch (error) {
+    alert(error.message);
+  }
 });
 
-unitAdminList.addEventListener("click", (event) => {
+unitAdminList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-remove-unit]");
   if (!button || currentRole !== "superAdmin") return;
   const type = button.dataset.removeType;
   const name = button.dataset.removeUnit;
-  units[type] = units[type].filter((unit) => unit !== name);
-  records = records.filter((record) => record.region !== name);
-  populateControls();
-  renderModule();
+  try {
+    if (apiReady) {
+      const result = await api(`/api/units/${encodeURIComponent(type)}/${encodeURIComponent(name)}`, { method: "DELETE" });
+      units = result.units;
+      records = result.records;
+    } else {
+      units[type] = units[type].filter((unit) => unit !== name);
+      records = records.filter((record) => record.region !== name);
+    }
+    populateControls();
+    renderModule();
+  } catch (error) {
+    alert(error.message);
+  }
 });
 
-populateControls();
+loadData();

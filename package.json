@@ -1,0 +1,13 @@
+{
+  "name": "qixing-open-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "七星数智公开一体化云平台可运行网站版本",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

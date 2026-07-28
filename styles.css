@@ -6,7 +6,7 @@
   --panel: rgba(3, 24, 42, 0.86);
   --line: rgba(97, 239, 255, 0.35);
   --muted: rgba(226, 244, 255, 0.76);
-  --home-menu-scale: 1.05;
+  --home-menu-scale: 1;
   --home-red: #a40f14;
   --home-deep-red: #65070d;
   --home-gold: #f6d784;
@@ -64,7 +64,7 @@ select {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center center;
+  object-position: center 61%;
   background: #143718;
 }
 
@@ -73,7 +73,7 @@ select {
   inset: 0;
   z-index: -2;
   background:
-    linear-gradient(180deg, rgba(2, 18, 34, 0.58) 0%, rgba(4, 22, 19, 0.12) 36%, rgba(2, 14, 12, 0.54) 100%),
+    linear-gradient(180deg, rgba(2, 18, 34, 0.54) 0%, rgba(4, 22, 19, 0.08) 36%, rgba(2, 14, 12, 0.38) 100%),
     radial-gradient(circle at 50% 46%, rgba(255, 222, 142, 0.2), transparent 24%),
     radial-gradient(circle at 50% 52%, rgba(3, 16, 16, 0.14), transparent 44%);
   pointer-events: none;
@@ -96,16 +96,16 @@ select {
 .home-title {
   position: absolute;
   left: 50%;
-  top: clamp(42px, 7vh, 74px);
+  top: clamp(34px, 5.8vh, 54px);
   z-index: 4;
-  width: min(1100px, calc(100vw - 320px));
+  width: min(1040px, calc(100vw - 280px));
   margin: 0;
   transform: translateX(-50%);
   color: #fff0b8;
   background: linear-gradient(180deg, #fff9df 0%, #ffe18b 32%, #b77625 63%, #fff0b8 82%, #7a3a12 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  font-size: clamp(42px, 4.8vw, 76px);
+  font-size: clamp(38px, 4vw, 72px);
   font-weight: 900;
   line-height: 1.06;
   text-align: center;
@@ -178,9 +178,9 @@ input {
 .bowl-entry {
   position: absolute;
   left: 50%;
-  top: 52%;
+  top: 47%;
   z-index: 4;
-  width: clamp(260px, 25vw, 410px);
+  width: clamp(220px, 18.5vw, 340px);
   aspect-ratio: 1;
   height: auto;
   display: grid;
@@ -203,7 +203,7 @@ input {
 .bowl-entry::before {
   content: "";
   position: absolute;
-  inset: -16px;
+  inset: -12px;
   border: 1px solid rgba(255, 222, 124, 0.36);
   border-radius: 50%;
   background: conic-gradient(from 210deg, rgba(255, 224, 139, 0), rgba(255, 224, 139, 0.46), rgba(38, 244, 255, 0.38), rgba(255, 224, 139, 0));
@@ -239,8 +239,8 @@ input {
 
 .hex {
   position: absolute;
-  width: 210px;
-  height: 158px;
+  width: clamp(150px, 11.5vw, 210px);
+  height: clamp(114px, 8.65vw, 158px);
   display: grid;
   align-content: center;
   place-items: center;
@@ -316,7 +316,7 @@ input {
 .hex span {
   position: relative;
   z-index: 1;
-  font-size: 27px;
+  font-size: clamp(20px, 1.5vw, 27px);
   font-weight: 800;
   color: #ffeeb6;
   text-shadow:
@@ -330,33 +330,59 @@ input {
 }
 
 .hex--party {
-  left: 9.4vw;
-  top: 25vh;
+  left: 6.8vw;
+  top: 24vh;
 }
 
 .hex--gov {
-  left: 6.5vw;
+  left: 3.8vw;
   top: 45vh;
 }
 
 .hex--finance {
-  left: 9.4vw;
-  top: 65vh;
+  left: 6.8vw;
+  top: 66vh;
 }
 
 .hex--staff {
-  right: 9.4vw;
-  top: 25vh;
+  right: 6.8vw;
+  top: 24vh;
 }
 
 .hex--cadre {
-  right: 6.5vw;
+  right: 3.8vw;
   top: 45vh;
 }
 
 .hex--notice {
-  right: 9.4vw;
-  top: 65vh;
+  right: 6.8vw;
+  top: 66vh;
+}
+
+@media (max-height: 820px) and (min-width: 1181px) {
+  .home-title {
+    top: 38px;
+  }
+
+  .bowl-entry {
+    top: 47%;
+    width: clamp(210px, 17vw, 305px);
+  }
+
+  .hex--party,
+  .hex--staff {
+    top: 24vh;
+  }
+
+  .hex--gov,
+  .hex--cadre {
+    top: 45vh;
+  }
+
+  .hex--finance,
+  .hex--notice {
+    top: 66vh;
+  }
 }
 
 .screen--module,
