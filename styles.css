@@ -751,6 +751,37 @@ input {
   border-top: 1px solid rgba(97, 239, 255, 0.16);
 }
 
+.file-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.file-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-actions a {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(97, 239, 255, 0.45);
+  border-radius: 6px;
+  color: #e8fbff;
+  background: rgba(7, 78, 110, 0.56);
+}
+
+.file-actions a:hover {
+  border-color: rgba(255, 226, 148, 0.8);
+  color: #fff1b6;
+}
+
 .empty-state {
   margin: 0;
   padding: 18px;

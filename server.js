@@ -132,16 +132,26 @@ function modulePath(module) {
   }[module] || "other";
 }
 
-function ossResource(objectKey) {
-  return `/${OSS_BUCKET}/${objectKey}`;
+function ossResource(objectKey, params = {}) {
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+  return `/${OSS_BUCKET}/${objectKey}${query ? `?${query}` : ""}`;
 }
 
 function ossPath(objectKey) {
   return `/${objectKey.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-function ossSignature(method, objectKey, contentType, dateOrExpires) {
-  const stringToSign = `${method}\n\n${contentType || ""}\n${dateOrExpires}\n${ossResource(objectKey)}`;
+function disposition(type, fileName) {
+  const fallbackName = safeName(fileName || "未命名文件").replace(/[^\x20-\x7e]/g, "_");
+  return `${type}; filename="${fallbackName}"; filename*=UTF-8''${encodeURIComponent(fileName || fallbackName)}`;
+}
+
+function ossSignature(method, objectKey, contentType, dateOrExpires, params = {}) {
+  const stringToSign = `${method}\n\n${contentType || ""}\n${dateOrExpires}\n${ossResource(objectKey, params)}`;
   return crypto.createHmac("sha1", OSS_ACCESS_KEY_SECRET).update(stringToSign).digest("base64");
 }
 
@@ -175,10 +185,14 @@ function uploadToOss(buffer, objectKey, contentType) {
   });
 }
 
-function signedOssUrl(objectKey, ttlSeconds = 600) {
+function signedOssUrl(objectKey, fileName, download = false, ttlSeconds = 600) {
   const expires = Math.floor(Date.now() / 1000) + ttlSeconds;
-  const signature = ossSignature("GET", objectKey, "", expires);
+  const responseParams = {
+    "response-content-disposition": disposition(download ? "attachment" : "inline", fileName || path.basename(objectKey))
+  };
+  const signature = ossSignature("GET", objectKey, "", expires, responseParams);
   const params = new URLSearchParams({
+    ...responseParams,
     OSSAccessKeyId: OSS_ACCESS_KEY_ID,
     Expires: String(expires),
     Signature: signature
@@ -288,6 +302,7 @@ function contentTypeFor(file) {
 }
 
 async function handleApi(req, res, pathname) {
+  const requestUrl = new URL(req.url, `http://${req.headers.host}`);
   if (req.method === "GET" && pathname === "/api/bootstrap") {
     const db = readDb();
     return sendJson(res, 200, { units: db.units, modules: db.modules, records: db.records, user: currentUser(req) });
@@ -297,13 +312,25 @@ async function handleApi(req, res, pathname) {
   if (req.method === "GET" && fileMatch) {
     const db = readDb();
     const record = db.records.find((item) => item.id === decodeURIComponent(fileMatch[1]));
+    const download = requestUrl.searchParams.get("download") === "1";
     if (!record || !record.fileStorage) return sendJson(res, 404, { message: "文件不存在。" });
     if (record.fileStorage.provider === "oss") {
-      res.writeHead(302, { Location: signedOssUrl(record.fileStorage.key) });
+      res.writeHead(302, { Location: signedOssUrl(record.fileStorage.key, record.fileName, download) });
       return res.end();
     }
-    res.writeHead(302, { Location: `/uploads/${encodeURIComponent(record.fileStorage.path)}` });
-    return res.end();
+    const filePath = path.join(UPLOAD_DIR, record.fileStorage.path);
+    fs.readFile(filePath, (error, data) => {
+      if (error) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        return res.end("Not found");
+      }
+      res.writeHead(200, {
+        "Content-Type": contentTypeFor(record.fileName),
+        "Content-Disposition": disposition(download ? "attachment" : "inline", record.fileName)
+      });
+      res.end(data);
+    });
+    return;
   }
 
   if (req.method === "POST" && pathname === "/api/register") {

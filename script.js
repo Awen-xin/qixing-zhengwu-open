@@ -241,7 +241,17 @@ function publicRows() {
 }
 
 function fileText(record) {
-  if (record.fileUrl) return `<a href="${record.fileUrl}" target="_blank" rel="noopener">${record.fileName}</a>`;
+  if (record.fileUrl) {
+    const separator = record.fileUrl.includes("?") ? "&" : "?";
+    const downloadUrl = `${record.fileUrl}${separator}download=1`;
+    return `
+      <span class="file-actions">
+        <span class="file-name">${record.fileName}</span>
+        <a href="${record.fileUrl}" target="_blank" rel="noopener">查看</a>
+        <a href="${downloadUrl}" download="${record.fileName}">下载</a>
+      </span>
+    `;
+  }
   return `<span>${record.fileName}</span>`;
 }
 
