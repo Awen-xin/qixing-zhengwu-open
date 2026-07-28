@@ -8,7 +8,7 @@
 - 最高权限管理员可维护单位目录
 - Word、PDF、Excel 文件上传
 - 公开信息、单位目录、用户登记信息持久化保存到服务器本地 `data/db.json`
-- 上传文件保存到 `uploads/`
+- 上传文件默认保存到 `uploads/`，配置阿里云 OSS 后自动保存到 OSS
 
 ## 本地运行
 
@@ -21,6 +21,28 @@ node server.js
 ```text
 http://localhost:3000
 ```
+
+## 阿里云 OSS 上传配置
+
+如果需要把管理员上传的 Word、PDF、Excel 文件保存到 OSS，在服务器服务中配置这些环境变量：
+
+```bash
+OSS_REGION=oss-cn-beijing
+OSS_BUCKET=qixing-zhengwu-files
+OSS_ACCESS_KEY_ID=RAM用户的AccessKey ID
+OSS_ACCESS_KEY_SECRET=RAM用户的AccessKey Secret
+```
+
+Bucket 建议配置：
+
+```text
+地域：华北2（北京）
+存储类型：标准存储
+冗余类型：本地冗余
+读写权限：私有
+```
+
+配置后，上传文件会保存到 OSS 的 `uploads/` 目录下。网页中的文件入口会通过后端生成临时访问链接，不需要把 Bucket 改成公共读。
 
 ## 演示登录
 
@@ -41,7 +63,7 @@ script.js       前端交互和接口调用
 server.js       Node.js 后端服务
 assets/         首页图片等静态资源
 data/db.json    运行后自动生成的数据文件
-uploads/        上传后的 Word、PDF、Excel 文件
+uploads/        未配置 OSS 时，本地保存上传文件
 ```
 
 ## 阿里云 Windows Server 部署

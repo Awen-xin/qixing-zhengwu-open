@@ -1,4 +1,5 @@
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -8,6 +9,12 @@ const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
 const UPLOAD_DIR = path.join(ROOT, "uploads");
 const DB_FILE = path.join(DATA_DIR, "db.json");
+const OSS_REGION = process.env.OSS_REGION || "";
+const OSS_BUCKET = process.env.OSS_BUCKET || "";
+const OSS_ACCESS_KEY_ID = process.env.OSS_ACCESS_KEY_ID || "";
+const OSS_ACCESS_KEY_SECRET = process.env.OSS_ACCESS_KEY_SECRET || "";
+const OSS_ENDPOINT = process.env.OSS_ENDPOINT || (OSS_REGION ? `${OSS_REGION}.aliyuncs.com` : "");
+const OSS_ENABLED = Boolean(OSS_BUCKET && OSS_ACCESS_KEY_ID && OSS_ACCESS_KEY_SECRET && OSS_ENDPOINT);
 
 const chineseNumbers = [
   "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
@@ -114,6 +121,84 @@ function safeName(name) {
   return String(name || "未命名文件").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").slice(0, 120);
 }
 
+function modulePath(module) {
+  return {
+    "党务公开": "dangwu",
+    "政务公开": "zhengwu",
+    "财务公开": "caiwu",
+    "职工疑问": "worker-question",
+    "干部答疑": "cadre-answer",
+    "通知公告": "notice"
+  }[module] || "other";
+}
+
+function ossResource(objectKey) {
+  return `/${OSS_BUCKET}/${objectKey}`;
+}
+
+function ossPath(objectKey) {
+  return `/${objectKey.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function ossSignature(method, objectKey, contentType, dateOrExpires) {
+  const stringToSign = `${method}\n\n${contentType || ""}\n${dateOrExpires}\n${ossResource(objectKey)}`;
+  return crypto.createHmac("sha1", OSS_ACCESS_KEY_SECRET).update(stringToSign).digest("base64");
+}
+
+function uploadToOss(buffer, objectKey, contentType) {
+  return new Promise((resolve, reject) => {
+    const date = new Date().toUTCString();
+    const signature = ossSignature("PUT", objectKey, contentType, date);
+    const req = https.request({
+      method: "PUT",
+      hostname: `${OSS_BUCKET}.${OSS_ENDPOINT}`,
+      path: ossPath(objectKey),
+      headers: {
+        Authorization: `OSS ${OSS_ACCESS_KEY_ID}:${signature}`,
+        Date: date,
+        "Content-Type": contentType,
+        "Content-Length": buffer.length
+      }
+    }, (ossRes) => {
+      const chunks = [];
+      ossRes.on("data", (chunk) => chunks.push(chunk));
+      ossRes.on("end", () => {
+        if (ossRes.statusCode >= 200 && ossRes.statusCode < 300) {
+          resolve({ provider: "oss", key: objectKey });
+        } else {
+          reject(new Error(`OSS upload failed: ${ossRes.statusCode} ${Buffer.concat(chunks).toString("utf8")}`));
+        }
+      });
+    });
+    req.on("error", reject);
+    req.end(buffer);
+  });
+}
+
+function signedOssUrl(objectKey, ttlSeconds = 600) {
+  const expires = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const signature = ossSignature("GET", objectKey, "", expires);
+  const params = new URLSearchParams({
+    OSSAccessKeyId: OSS_ACCESS_KEY_ID,
+    Expires: String(expires),
+    Signature: signature
+  });
+  return `https://${OSS_BUCKET}.${OSS_ENDPOINT}${ossPath(objectKey)}?${params.toString()}`;
+}
+
+async function storeUploadedFile(file, module, recordId) {
+  const fileName = safeName(file.filename);
+  const ext = path.extname(fileName).toLowerCase();
+  const storedName = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}${ext}`;
+  if (OSS_ENABLED) {
+    const key = `uploads/${modulePath(module)}/${storedName}`;
+    const stored = await uploadToOss(file.buffer, key, file.contentType || contentTypeFor(fileName));
+    return { fileName, fileUrl: `/api/files/${recordId}`, fileStorage: stored };
+  }
+  fs.writeFileSync(path.join(UPLOAD_DIR, storedName), file.buffer);
+  return { fileName, fileUrl: `/uploads/${encodeURIComponent(storedName)}`, fileStorage: { provider: "local", path: storedName } };
+}
+
 function parseCookies(req) {
   return Object.fromEntries((req.headers.cookie || "").split(";").filter(Boolean).map((part) => {
     const [key, ...value] = part.trim().split("=");
@@ -208,6 +293,19 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 200, { units: db.units, modules: db.modules, records: db.records, user: currentUser(req) });
   }
 
+  const fileMatch = /^\/api\/files\/([^/]+)$/.exec(pathname);
+  if (req.method === "GET" && fileMatch) {
+    const db = readDb();
+    const record = db.records.find((item) => item.id === decodeURIComponent(fileMatch[1]));
+    if (!record || !record.fileStorage) return sendJson(res, 404, { message: "文件不存在。" });
+    if (record.fileStorage.provider === "oss") {
+      res.writeHead(302, { Location: signedOssUrl(record.fileStorage.key) });
+      return res.end();
+    }
+    res.writeHead(302, { Location: `/uploads/${encodeURIComponent(record.fileStorage.path)}` });
+    return res.end();
+  }
+
   if (req.method === "POST" && pathname === "/api/register") {
     const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
     const user = { role: "public", name: String(body.name || "").trim(), phone: String(body.phone || "").trim() };
@@ -243,15 +341,18 @@ async function handleApi(req, res, pathname) {
     const unit = allUnits(db.units).find((item) => item.name === region);
     if (!unit) return sendJson(res, 400, { message: "所属单位不存在。" });
     const file = parts.file;
+    const recordId = crypto.randomUUID();
     let fileName = file?.filename ? safeName(file.filename) : "未命名文件";
     let fileUrl = "";
+    let fileStorage = null;
     if (file?.buffer?.length) {
-      const storedName = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${fileName}`;
-      fs.writeFileSync(path.join(UPLOAD_DIR, storedName), file.buffer);
-      fileUrl = `/uploads/${encodeURIComponent(storedName)}`;
+      const stored = await storeUploadedFile(file, String(parts.module || "政务公开"), recordId);
+      fileName = stored.fileName;
+      fileUrl = stored.fileUrl;
+      fileStorage = stored.fileStorage;
     }
     const record = {
-      id: crypto.randomUUID(),
+      id: recordId,
       module: String(parts.module || "政务公开"),
       region,
       unitType: unit.unitType,
@@ -261,6 +362,7 @@ async function handleApi(req, res, pathname) {
       status: "已公开",
       fileName,
       fileUrl,
+      fileStorage,
       count: 1,
       createdAt: new Date().toISOString().slice(0, 10)
     };
