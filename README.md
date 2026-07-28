@@ -7,12 +7,14 @@
 - 普通管理员登录后只能上传和删除本单位信息
 - 最高权限管理员可维护单位目录
 - Word、PDF、Excel 文件上传
+- PDF、Word `.docx`、Excel `.xlsx/.xls` 在线预览
 - 公开信息、单位目录、用户登记信息持久化保存到服务器本地 `data/db.json`
 - 上传文件默认保存到 `uploads/`，配置阿里云 OSS 后自动保存到 OSS
 
 ## 本地运行
 
 ```bash
+npm install
 node server.js
 ```
 
@@ -43,6 +45,15 @@ Bucket 建议配置：
 ```
 
 配置后，上传文件会保存到 OSS 的 `uploads/` 目录下。网页中的文件入口会通过后端生成临时访问链接，不需要把 Bucket 改成公共读。
+
+## 文件预览说明
+
+```text
+PDF：浏览器内嵌查看
+Word .docx：解析为网页内容查看
+Excel .xlsx/.xls：解析为网页表格查看
+Word .doc：建议下载查看，或上传前另存为 .docx
+```
 
 ## 演示登录
 

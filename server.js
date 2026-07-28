@@ -5,6 +5,17 @@ const path = require("path");
 const crypto = require("crypto");
 const zlib = require("zlib");
 
+function optionalRequire(name) {
+  try {
+    return require(name);
+  } catch {
+    return null;
+  }
+}
+
+const mammoth = optionalRequire("mammoth");
+const XLSX = optionalRequire("xlsx");
+
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
@@ -289,7 +300,7 @@ function zipEntries(buffer) {
   return entries;
 }
 
-function docxToHtml(buffer) {
+function basicDocxToHtml(buffer) {
   const entries = zipEntries(buffer);
   const xml = entries["word/document.xml"]?.toString("utf8") || "";
   const paragraphs = xml
@@ -301,7 +312,22 @@ function docxToHtml(buffer) {
     : `<p class="empty-state">暂未解析到可预览文字，可使用下载查看原文件。</p>`;
 }
 
-function xlsxToHtml(buffer) {
+async function docxToHtml(buffer) {
+  if (mammoth) {
+    const result = await mammoth.convertToHtml({ buffer }, {
+      styleMap: [
+        "p[style-name='Title'] => h1:fresh",
+        "p[style-name='Heading 1'] => h2:fresh",
+        "p[style-name='Heading 2'] => h3:fresh",
+        "table => table.document-table"
+      ]
+    });
+    return result.value || `<p class="empty-state">暂未解析到可预览文字，可使用下载查看原文件。</p>`;
+  }
+  return basicDocxToHtml(buffer);
+}
+
+function basicXlsxToHtml(buffer) {
   const entries = zipEntries(buffer);
   const sharedXml = entries["xl/sharedStrings.xml"]?.toString("utf8") || "";
   const shared = [...sharedXml.matchAll(/<si[\s\S]*?<\/si>/g)].map(([item]) => stripXml(item));
@@ -317,6 +343,17 @@ function xlsxToHtml(buffer) {
   return `<div class="preview-table-wrap"><table>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</table></div>`;
 }
 
+function xlsxToHtml(buffer) {
+  if (XLSX) {
+    const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) return `<p class="empty-state">暂未解析到可预览表格，可使用下载查看原文件。</p>`;
+    const html = XLSX.utils.sheet_to_html(workbook.Sheets[sheetName], { id: "preview-table", editable: false });
+    return `<div class="preview-sheet-name">工作表：${escapeHtml(sheetName)}</div><div class="preview-table-wrap">${html}</div>`;
+  }
+  return basicXlsxToHtml(buffer);
+}
+
 function previewHtml(record, bodyHtml) {
   return `<!doctype html>
 <html lang="zh-CN">
@@ -330,11 +367,17 @@ function previewHtml(record, bodyHtml) {
     h1 { margin: 0; font-size: 18px; font-weight: 700; }
     a { color: #fff1b6; text-decoration: none; white-space: nowrap; }
     main { max-width: 1120px; margin: 18px auto; padding: 22px; background: #fff; border-radius: 8px; box-shadow: 0 10px 30px rgba(16,54,72,.12); }
+    h2, h3 { color: #0b4964; margin: 24px 0 12px; }
     p { line-height: 1.9; margin: 0 0 12px; }
     iframe { width: 100%; height: calc(100vh - 110px); border: 0; background: #fff; }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    td { border: 1px solid #d8e7ec; padding: 8px 10px; min-width: 120px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 12px 0 18px; }
+    th, td { border: 1px solid #d8e7ec; padding: 8px 10px; min-width: 120px; line-height: 1.55; }
+    tr:first-child td, th { background: #edf7fa; color: #0b4964; font-weight: 700; }
+    img { max-width: 100%; height: auto; }
+    ul, ol { line-height: 1.8; }
+    .preview-sheet-name { margin-bottom: 12px; color: #667780; }
     .preview-table-wrap { overflow: auto; }
+    .document-table { table-layout: auto; }
     .empty-state { color: #667780; }
   </style>
 </head>
@@ -469,9 +512,11 @@ async function handleApi(req, res, pathname) {
     if (ext === ".pdf") {
       bodyHtml = `<iframe src="/api/files/${encodeURIComponent(record.id)}" title="${escapeHtml(record.fileName)}"></iframe>`;
     } else if (ext === ".docx") {
-      bodyHtml = docxToHtml(data);
-    } else if (ext === ".xlsx") {
+      bodyHtml = await docxToHtml(data);
+    } else if (ext === ".xlsx" || ext === ".xls") {
       bodyHtml = xlsxToHtml(data);
+    } else if (ext === ".doc") {
+      bodyHtml = `<p class="empty-state">旧版 Word（.doc）暂不支持网页预览，请下载原文件查看。建议后续上传 .docx 格式。</p>`;
     } else {
       bodyHtml = `<p class="empty-state">该文件格式暂不支持网页预览，请下载原文件查看。</p>`;
     }
