@@ -3,6 +3,7 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const zlib = require("zlib");
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
@@ -185,19 +186,33 @@ function uploadToOss(buffer, objectKey, contentType) {
   });
 }
 
-function signedOssUrl(objectKey, fileName, download = false, ttlSeconds = 600) {
-  const expires = Math.floor(Date.now() / 1000) + ttlSeconds;
-  const responseParams = {
-    "response-content-disposition": disposition(download ? "attachment" : "inline", fileName || path.basename(objectKey))
-  };
-  const signature = ossSignature("GET", objectKey, "", expires, responseParams);
-  const params = new URLSearchParams({
-    ...responseParams,
-    OSSAccessKeyId: OSS_ACCESS_KEY_ID,
-    Expires: String(expires),
-    Signature: signature
+function downloadFromOss(objectKey) {
+  return new Promise((resolve, reject) => {
+    const date = new Date().toUTCString();
+    const signature = ossSignature("GET", objectKey, "", date);
+    const req = https.request({
+      method: "GET",
+      hostname: `${OSS_BUCKET}.${OSS_ENDPOINT}`,
+      path: ossPath(objectKey),
+      headers: {
+        Authorization: `OSS ${OSS_ACCESS_KEY_ID}:${signature}`,
+        Date: date
+      }
+    }, (ossRes) => {
+      const chunks = [];
+      ossRes.on("data", (chunk) => chunks.push(chunk));
+      ossRes.on("end", () => {
+        const buffer = Buffer.concat(chunks);
+        if (ossRes.statusCode >= 200 && ossRes.statusCode < 300) {
+          resolve(buffer);
+        } else {
+          reject(new Error(`OSS download failed: ${ossRes.statusCode} ${buffer.toString("utf8")}`));
+        }
+      });
+    });
+    req.on("error", reject);
+    req.end();
   });
-  return `https://${OSS_BUCKET}.${OSS_ENDPOINT}${ossPath(objectKey)}?${params.toString()}`;
 }
 
 async function storeUploadedFile(file, module, recordId) {
@@ -210,7 +225,127 @@ async function storeUploadedFile(file, module, recordId) {
     return { fileName, fileUrl: `/api/files/${recordId}`, fileStorage: stored };
   }
   fs.writeFileSync(path.join(UPLOAD_DIR, storedName), file.buffer);
-  return { fileName, fileUrl: `/uploads/${encodeURIComponent(storedName)}`, fileStorage: { provider: "local", path: storedName } };
+  return { fileName, fileUrl: `/api/files/${recordId}`, fileStorage: { provider: "local", path: storedName } };
+}
+
+async function readStoredFile(record) {
+  if (!record.fileStorage) return null;
+  if (record.fileStorage.provider === "oss") {
+    return downloadFromOss(record.fileStorage.key);
+  }
+  return fs.promises.readFile(path.join(UPLOAD_DIR, record.fileStorage.path));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  }[char]));
+}
+
+function stripXml(text) {
+  return String(text || "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'");
+}
+
+function zipEntries(buffer) {
+  const entries = {};
+  let eocd = -1;
+  for (let i = buffer.length - 22; i >= 0; i -= 1) {
+    if (buffer.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd === -1) return entries;
+  const centralSize = buffer.readUInt32LE(eocd + 12);
+  const centralOffset = buffer.readUInt32LE(eocd + 16);
+  let offset = centralOffset;
+  const centralEnd = centralOffset + centralSize;
+  while (offset < centralEnd && buffer.readUInt32LE(offset) === 0x02014b50) {
+    const method = buffer.readUInt16LE(offset + 10);
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const fileNameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const localOffset = buffer.readUInt32LE(offset + 42);
+    const name = buffer.slice(offset + 46, offset + 46 + fileNameLength).toString("utf8");
+    const localNameLength = buffer.readUInt16LE(localOffset + 26);
+    const localExtraLength = buffer.readUInt16LE(localOffset + 28);
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    const data = buffer.slice(dataStart, dataStart + compressedSize);
+    if (method === 0) entries[name] = data;
+    if (method === 8) entries[name] = zlib.inflateRawSync(data);
+    offset += 46 + fileNameLength + extraLength + commentLength;
+  }
+  return entries;
+}
+
+function docxToHtml(buffer) {
+  const entries = zipEntries(buffer);
+  const xml = entries["word/document.xml"]?.toString("utf8") || "";
+  const paragraphs = xml
+    .split(/<\/w:p>/)
+    .map((part) => stripXml(part.replace(/<w:tab\/>/g, "    ").replace(/<w:br\/>/g, "\n")).trim())
+    .filter(Boolean);
+  return paragraphs.length
+    ? paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join("")
+    : `<p class="empty-state">暂未解析到可预览文字，可使用下载查看原文件。</p>`;
+}
+
+function xlsxToHtml(buffer) {
+  const entries = zipEntries(buffer);
+  const sharedXml = entries["xl/sharedStrings.xml"]?.toString("utf8") || "";
+  const shared = [...sharedXml.matchAll(/<si[\s\S]*?<\/si>/g)].map(([item]) => stripXml(item));
+  const sheetName = Object.keys(entries).find((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
+  const sheetXml = sheetName ? entries[sheetName].toString("utf8") : "";
+  const rows = [...sheetXml.matchAll(/<row[\s\S]*?<\/row>/g)].slice(0, 80).map(([row]) => {
+    return [...row.matchAll(/<c[^>]*?(?:t="([^"]+)")?[^>]*>([\s\S]*?)<\/c>/g)].map(([, type, body]) => {
+      const value = /<v>([\s\S]*?)<\/v>/.exec(body)?.[1] || /<t[^>]*>([\s\S]*?)<\/t>/.exec(body)?.[1] || "";
+      return type === "s" ? (shared[Number(value)] || "") : stripXml(value);
+    });
+  }).filter((row) => row.some(Boolean));
+  if (!rows.length) return `<p class="empty-state">暂未解析到可预览表格，可使用下载查看原文件。</p>`;
+  return `<div class="preview-table-wrap"><table>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</table></div>`;
+}
+
+function previewHtml(record, bodyHtml) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(record.fileName)}</title>
+  <style>
+    body { margin: 0; font-family: "Microsoft YaHei", Arial, sans-serif; color: #1d2b34; background: #eef5f6; }
+    header { position: sticky; top: 0; z-index: 2; display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 14px 22px; background: #073a53; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+    h1 { margin: 0; font-size: 18px; font-weight: 700; }
+    a { color: #fff1b6; text-decoration: none; white-space: nowrap; }
+    main { max-width: 1120px; margin: 18px auto; padding: 22px; background: #fff; border-radius: 8px; box-shadow: 0 10px 30px rgba(16,54,72,.12); }
+    p { line-height: 1.9; margin: 0 0 12px; }
+    iframe { width: 100%; height: calc(100vh - 110px); border: 0; background: #fff; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    td { border: 1px solid #d8e7ec; padding: 8px 10px; min-width: 120px; }
+    .preview-table-wrap { overflow: auto; }
+    .empty-state { color: #667780; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>${escapeHtml(record.fileName)}</h1>
+    <a href="/api/files/${encodeURIComponent(record.id)}?download=1">下载原文件</a>
+  </header>
+  <main>${bodyHtml}</main>
+</body>
+</html>`;
 }
 
 function parseCookies(req) {
@@ -314,22 +449,34 @@ async function handleApi(req, res, pathname) {
     const record = db.records.find((item) => item.id === decodeURIComponent(fileMatch[1]));
     const download = requestUrl.searchParams.get("download") === "1";
     if (!record || !record.fileStorage) return sendJson(res, 404, { message: "文件不存在。" });
-    if (record.fileStorage.provider === "oss") {
-      res.writeHead(302, { Location: signedOssUrl(record.fileStorage.key, record.fileName, download) });
-      return res.end();
-    }
-    const filePath = path.join(UPLOAD_DIR, record.fileStorage.path);
-    fs.readFile(filePath, (error, data) => {
-      if (error) {
-        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-        return res.end("Not found");
-      }
-      res.writeHead(200, {
-        "Content-Type": contentTypeFor(record.fileName),
-        "Content-Disposition": disposition(download ? "attachment" : "inline", record.fileName)
-      });
-      res.end(data);
+    const data = await readStoredFile(record);
+    res.writeHead(200, {
+      "Content-Type": contentTypeFor(record.fileName),
+      "Content-Disposition": disposition(download ? "attachment" : "inline", record.fileName)
     });
+    res.end(data);
+    return;
+  }
+
+  const previewMatch = /^\/api\/files\/([^/]+)\/preview$/.exec(pathname);
+  if (req.method === "GET" && previewMatch) {
+    const db = readDb();
+    const record = db.records.find((item) => item.id === decodeURIComponent(previewMatch[1]));
+    if (!record || !record.fileStorage) return sendJson(res, 404, { message: "文件不存在。" });
+    const ext = path.extname(record.fileName).toLowerCase();
+    const data = await readStoredFile(record);
+    let bodyHtml = "";
+    if (ext === ".pdf") {
+      bodyHtml = `<iframe src="/api/files/${encodeURIComponent(record.id)}" title="${escapeHtml(record.fileName)}"></iframe>`;
+    } else if (ext === ".docx") {
+      bodyHtml = docxToHtml(data);
+    } else if (ext === ".xlsx") {
+      bodyHtml = xlsxToHtml(data);
+    } else {
+      bodyHtml = `<p class="empty-state">该文件格式暂不支持网页预览，请下载原文件查看。</p>`;
+    }
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(previewHtml(record, bodyHtml));
     return;
   }
 

@@ -242,12 +242,14 @@ function publicRows() {
 
 function fileText(record) {
   if (record.fileUrl) {
-    const separator = record.fileUrl.includes("?") ? "&" : "?";
-    const downloadUrl = `${record.fileUrl}${separator}download=1`;
+    const fileApiUrl = record.id ? `/api/files/${encodeURIComponent(record.id)}` : record.fileUrl;
+    const viewUrl = record.id ? `/api/files/${encodeURIComponent(record.id)}/preview` : record.fileUrl;
+    const separator = fileApiUrl.includes("?") ? "&" : "?";
+    const downloadUrl = `${fileApiUrl}${separator}download=1`;
     return `
       <span class="file-actions">
         <span class="file-name">${record.fileName}</span>
-        <a href="${record.fileUrl}" target="_blank" rel="noopener">查看</a>
+        <a href="${viewUrl}" target="_blank" rel="noopener">查看</a>
         <a href="${downloadUrl}" download="${record.fileName}">下载</a>
       </span>
     `;
