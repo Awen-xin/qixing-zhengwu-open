@@ -545,6 +545,17 @@ recordGrid.addEventListener("click", async (event) => {
   if (!button) return;
   const target = records.find((record) => record.id === button.dataset.delete);
   if (!target || !canDelete(target)) return;
+  const confirmed = window.confirm([
+    "确认删除这条公开信息吗？",
+    "",
+    `标题：${target.title}`,
+    `单位：${target.region}`,
+    `栏目：${target.module}`,
+    `文件：${target.fileName || "无附件"}`,
+    "",
+    "删除后，网页列表中将不再显示这条信息。"
+  ].join("\n"));
+  if (!confirmed) return;
   try {
     if (apiReady) {
       const result = await api(`/api/records/${encodeURIComponent(target.id)}`, { method: "DELETE" });
